@@ -19,6 +19,14 @@ def cli():
     pass
 
 
+@cli.command(name='login-test')
+def login_test():
+    """
+    Test if already logged in to Google Photos.
+    """
+    google_photos_utility.login_test()
+
+
 @cli.command(name='login')
 def login():
     """

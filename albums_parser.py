@@ -34,6 +34,9 @@ class AlbumsParser:
             # parse links
             valid_links += self.parse_albums(visible_links)
 
+            # show progress
+            print(f'    scroll_count={scroll_count}    unique_links={len(self.albums)}/{self.__minimum_expected_albums}')
+
             # scroll once
             lenOfPage = scroll_once_by_element_height_xpath_element(self.__driver, self.__albums_main_div_xpath)
             if lastCount == lenOfPage:

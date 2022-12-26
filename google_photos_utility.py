@@ -19,7 +19,7 @@ DEFAULT_ALBUMS_FILENAME = 'store/albums.json'
 driver = object
 
 
-def login():
+def login_test():
     """
     Login to Google Photos.
     """
@@ -34,6 +34,18 @@ def login():
         print(f"Already signed in!")
         quit_driver()
         return
+    else:
+        print(f"Not signed in! Please login.")
+
+
+def login():
+    """
+    Login to Google Photos.
+    """
+    global driver
+
+    # load credentials
+    google_credentials = dotenv_values(".env")
 
     # login to google if requried
     driver = DriverFactory.createChromeGoogleSafeDriver(headless=False, window_width=800, window_height=1200)
@@ -57,7 +69,7 @@ def download_albums_info(filename: str = DEFAULT_ALBUMS_FILENAME):
     """
     global driver
     driver = DriverFactory.createChromeGoogleSafeDriver(
-        headless=True, window_width=1400, window_height=5000)
+        headless=True, window_width=800, window_height=1200)
 
     # Open google albums page on browser
     driver.get('https://photos.google.com/albums')
@@ -88,7 +100,7 @@ def download_photos_links(album_name: str, albums_filename: str = DEFAULT_ALBUMS
     global driver
     # some pages have a very large number of pictures, so setting the height high to capture more links with minimal scrolling
     driver = DriverFactory.createChromeGoogleSafeDriver(
-        headless=True, window_width=1400, window_height=5000, url=albums[album_name][1])
+        headless=True, window_width=800, window_height=1200, url=albums[album_name][1])
 
     pictures_parser = PicturesParser(driver=driver, album_name=album_name,
                                      album_desc=albums[album_name][0], album_link=albums[album_name][1])

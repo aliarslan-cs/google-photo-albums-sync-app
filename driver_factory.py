@@ -36,6 +36,7 @@ class DriverFactory:
         
         # some pages have a very large number of pictures, so setting the height high (1400, 5000) helps to capture more links with minimal scrolling
         driver.set_window_size(window_width, window_height)
+        print(f'session started with width: {window_width}, height: {window_height}')
 
         # return driver object
         return driver

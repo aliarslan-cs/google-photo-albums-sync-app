@@ -47,20 +47,12 @@ class AlbumDownloader:
         album_obj = [self.__album_name, self.__album_desc, self.__minimum_expected_pictures]
 
         # check if album already exists
-        if os.path.isfile(album_txt_file) and os.path.isfile(album_pictures_file):
-            with open(album_txt_file, mode='r', encoding='utf-8') as r_afile:
-                old_album_obj = json.load(r_afile)
+        if os.path.isfile(album_pictures_file):
             with open(album_pictures_file, mode='r', encoding='utf-8') as r_pfile:
                 old_pictures_obj = json.load(r_pfile)
-            print(f'old: {old_album_obj}')
-            print(f'new: {album_obj}')
-            print(f'old len: {len(old_pictures_obj)}  -  new len: {len(self.__pictures_links)}')
-            if old_album_obj == album_obj and len(old_pictures_obj) == len(self.__pictures_links):
-                print('exisitng album is already up to date.')
-                return
-            elif len(old_pictures_obj) != len(self.__pictures_links):
-                print("ALBUM EXISTS BUT NEEDS SYNC.")
-                pictures_to_download = [_link for _link in self.__pictures_links if _link not in old_pictures_obj]
+            pictures_to_download = [_link for _link in self.__pictures_links if _link not in old_pictures_obj]
+            if len(pictures_to_download) > 0:
+                print(f'ALBUM EXISTS BUT NEEDS TO SYNC {len(pictures_to_download)} items.')
                 driver = DriverFactory.createChromeGoogleSafeDriver(
                     headless=False, window_width=1200, window_height=800)
                 for missing_picture_link in pictures_to_download:
@@ -69,7 +61,9 @@ class AlbumDownloader:
                 with open(album_pictures_file, mode='w', encoding='utf-8') as w_album_pictures_file:
                     json.dump(self.__pictures_links, w_album_pictures_file, indent=4)
                 DriverFactory.close_driver(driver_instance=driver)
-                return
+            else:
+                print('Album already synchronized.')
+            return
         driver = DriverFactory.createChromeGoogleSafeDriver(
                     headless=False, window_width=1200, window_height=800, url=self._album_link)
         # open the album page
