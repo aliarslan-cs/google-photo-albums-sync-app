@@ -106,7 +106,7 @@ def download_wait(directory, timeout, nfiles=None):
     timeout : int
         How many seconds to wait until timing out.
     nfiles : int, defaults to None
-        If provided, also wait for the expected number of files.
+        If provided, also wait for at least the expected number of files.
 
     """
     seconds = 0
@@ -117,8 +117,8 @@ def download_wait(directory, timeout, nfiles=None):
         dl_wait = False
         # files = os.listdir(f'{directory}/*.zip')
         files = glob.glob(f'{directory}/*')
-        if nfiles and len(files) != nfiles:
-            print(f'waiting until {len(files)} out of {nfiles} file(s) is/are downloaded.')
+        if nfiles and len(files) < nfiles:
+            print(f'waiting until at least {nfiles} file(s) is/are downloaded, current count: {len(files)} file(s).')
             dl_wait = True
 
         for fname in files:
