@@ -2,6 +2,8 @@ import os
 import re
 import time
 import requests
+import pycurl
+from io import BytesIO
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -9,7 +11,8 @@ from google.auth.transport.requests import Request
 from logger import setup_logger
 
 DESTINATION_PATH = os.path.join('e:', os.sep, 'GooglePhotosSyncUsingAPI')
-COMPARE_FILESIZE_OF_EXISTING_FILES = False
+COMPARE_FILESIZE_OF_EXISTING_FILES = True
+CHUNK_SIZE = 16 * 1024 * 1024  # 16 MB
 SCOPES = ['https://www.googleapis.com/auth/photoslibrary.readonly']
 
 logger = setup_logger(log_file='logs/download-with-api.log', log_level='DEBUG', file_log_level='WARNING')
@@ -82,6 +85,7 @@ def get_media_items(creds, album_id):
 
     return media_items
 
+
 def get_file_size(download_url):
     response = requests.head(download_url, allow_redirects=True)
     response.raise_for_status()
@@ -109,9 +113,25 @@ def sanitize_filename(filename):
     
     return sanitized
 
+def download_video(url, filename):
+    buffer = BytesIO()
+    with open(filename, 'wb') as f:
+        c = pycurl.Curl()
+        c.setopt(c.URL, url)
+        c.setopt(c.WRITEDATA, f)
+        c.setopt(c.NOPROGRESS, True)  # Suppress the progress meter
+        c.setopt(c.FOLLOWLOCATION, True)  # Follow redirects
+        c.setopt(c.MAXREDIRS, 5)  # Maximum number of redirects to follow
+        c.perform()
+        c.close()
+
+
 def download_media_item(media_item, directory):
     filename = media_item['filename']
-    sanitized_filename = sanitize_filename(filename)  # Sanitize the filename
+    name, ext = os.path.splitext(filename)
+    unique_filename = f'{name}-{media_item['id'][-5:]}{ext}'
+    sanitized_filename = sanitize_filename(unique_filename)  # Sanitize the filename
+    
     file_path = os.path.join(directory, sanitized_filename)
     
     base_url = media_item['baseUrl']
@@ -125,7 +145,7 @@ def download_media_item(media_item, directory):
     # Check if file already exists and verify its size
     if os.path.exists(file_path):
         if not COMPARE_FILESIZE_OF_EXISTING_FILES:
-            logger.info(f"      - File {filename} already exists, skipping download.")
+            logger.info(f"      - File {sanitized_filename} already exists, skipping download.")
             return
         
         existing_file_size = os.path.getsize(file_path)
@@ -139,12 +159,35 @@ def download_media_item(media_item, directory):
 
 
     # Download the media item using requests
-    response = requests.get(download_url, stream=True)
-    response.raise_for_status()
+    if 'video' in media_item['mediaMetadata']:
+        download_video(download_url, file_path)
+    else:
+        response = requests.get(download_url, stream=True)
+        response.raise_for_status()
 
-    with open(file_path, 'wb') as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
+        with open(file_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                f.write(chunk)
+
+def download_media_item_with_retries(media_item, directory, album_title, media_index, total_media_items):
+    logger.info(f"  - Downloading {media_index}/{total_media_items}: {media_item['filename']}")
+    retries = 3
+    while retries > 0:
+        try:
+            download_media_item(media_item, directory)
+        except KeyboardInterrupt:
+            raise KeyboardInterrupt
+        except Exception as e:
+            retries -= 1
+            time_to_wait = 5  # seconds
+            if retries > 0:
+                logger.error(f'Failed to download Album: "{album_title}", Item: {media_item['filename']}, will retry {retries} more time(s) after {time_to_wait} seconds.')
+            else:
+                logger.critical(f'Failed to download Album: "{album_title}", Item: {media_item['filename']}, exception: {str(e)}.')
+                raise RuntimeError(f'Failed to download Album: "{album_title}", Item: {media_item['filename']}, exception: {str(e)}.')
+            time.sleep(time_to_wait)  # wait before retrying
+        else:
+            break
 
 def download_photos():
     creds = authenticate()
@@ -160,25 +203,32 @@ def download_photos():
         album_directory = os.path.join(DESTINATION_PATH, sanitize_filename(album_title))
         os.makedirs(album_directory, exist_ok=True)
 
-        media_items = get_media_items(creds, album_id)
-        total_media_items = len(media_items)
-        for media_index, media_item in enumerate(media_items, start=1):
-            logger.info(f"  - Downloading {media_index}/{total_media_items}: {media_item['filename']}")
-            retries = 3
-            while retries > 0:
-                try:
-                    download_media_item(media_item, album_directory)
-                except Exception as e:
-                    retries -= 1
-                    time_to_wait = 5  # seconds
-                    if retries > 0:
-                        logger.error(f'Failed to download Album: "{album_title}", Item: {media_item['filename']}, will retry {retries} more time(s) after {time_to_wait} seconds.')
-                    else:
-                        logger.critical(f'Failed to download Album: "{album_title}", Item: {media_item['filename']}, exception: {str(e)}.')
-                    time.sleep(time_to_wait)  # wait before retrying
+        # media_items = get_media_items(creds, album_id)
+        # total_media_items = len(media_items)
+
+        # for media_index, media_item in enumerate(media_items, start=1):
+        #     download_media_item_with_retries(media_item, album_directory, album_title, media_index, total_media_items)
+
+        retries = 100
+        while retries > 0:
+            try:
+                creds = authenticate()
+                media_items = get_media_items(creds, album_id)
+                total_media_items = len(media_items)
+                for media_index, media_item in enumerate(media_items, start=1):
+                    download_media_item_with_retries(media_item, album_directory, album_title, media_index, total_media_items)
+            except Exception as e:
+                retries -= 1
+                time_to_wait = 5  # seconds
+                if retries > 0:
+                    logger.error(f'Failed to download Album: "{album_title}", will retry {retries} more time(s) after {time_to_wait} seconds.')
                 else:
-                    break
-                
+                    logger.critical(f'Failed to download Album: "{album_title}", exception: {str(e)}.')
+                    raise RuntimeError(f'Failed to download Album: "{album_title}", exception: {str(e)}.')
+                time.sleep(time_to_wait)  # wait before retrying
+            else:
+                break
+
 
 if __name__ == '__main__':
     download_photos()
