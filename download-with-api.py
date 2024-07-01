@@ -11,7 +11,7 @@ from google.auth.transport.requests import Request
 from logger import setup_logger
 
 DESTINATION_PATH = os.path.join('e:', os.sep, 'GooglePhotosSyncUsingAPI')
-COMPARE_FILESIZE_OF_EXISTING_FILES = True
+COMPARE_FILESIZE_OF_EXISTING_FILES = False
 CHUNK_SIZE = 16 * 1024 * 1024  # 16 MB
 SCOPES = ['https://www.googleapis.com/auth/photoslibrary.readonly']
 
@@ -48,8 +48,7 @@ def get_albums(creds):
         data = response.json()
         albums.extend(data.get('albums', []))
 
-        # next_page_token = data.get('nextPageToken')
-        next_page_token = None
+        next_page_token = data.get('nextPageToken')
         if not next_page_token:
             break
 
